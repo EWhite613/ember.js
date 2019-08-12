@@ -2,7 +2,7 @@ import { moduleFor, RenderingTestCase, runTask } from 'internal-test-helpers';
 
 import { Object as EmberObject } from '@ember/-internals/runtime';
 import { setModifierManager } from '@ember/-internals/glimmer';
-import { set } from '@ember/-internals/metal';
+import { set, tracked } from '@ember/-internals/metal';
 
 class ModifierManagerTest extends RenderingTestCase {}
 
@@ -175,6 +175,64 @@ moduleFor(
       this.assertHTML(`<h1>hello world</h1>`);
 
       runTask(() => set(this.context, 'truthy', 'true'));
+    }
+
+    '@test lifecycle hooks are autotracked by default'(assert) {
+      let TrackedClass = EmberObject.extend({
+        count: tracked({ value: 0 }),
+      });
+
+      let trackedOne = TrackedClass.create();
+      let trackedTwo = TrackedClass.create();
+
+      let insertCount = 0;
+      let updateCount = 0;
+
+      let ModifierClass = setModifierManager(
+        owner => {
+          return new CustomModifierManager(owner);
+        },
+        EmberObject.extend({
+          didInsertElement() {},
+          didUpdate() {},
+          willDestroyElement() {},
+        })
+      );
+
+      this.registerModifier(
+        'foo-bar',
+        ModifierClass.extend({
+          didInsertElement() {
+            // track the count of the first item
+            trackedOne.count;
+            insertCount++;
+          },
+
+          didUpdate() {
+            // track the count of the second item
+            trackedTwo.count;
+            updateCount++;
+          },
+        })
+      );
+
+      this.render('<h1 {{foo-bar truthy}}>hello world</h1>');
+      this.assertHTML(`<h1>hello world</h1>`);
+
+      assert.equal(insertCount, 1);
+      assert.equal(updateCount, 0);
+
+      runTask(() => trackedTwo.count++);
+      assert.equal(updateCount, 0);
+
+      runTask(() => trackedOne.count++);
+      assert.equal(updateCount, 1);
+
+      runTask(() => trackedOne.count++);
+      assert.equal(updateCount, 1);
+
+      runTask(() => trackedTwo.count++);
+      assert.equal(updateCount, 2);
     }
   }
 );

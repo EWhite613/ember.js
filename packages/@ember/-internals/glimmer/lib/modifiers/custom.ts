@@ -1,6 +1,8 @@
+import { track } from '@ember/-internals/metal';
 import { Factory } from '@ember/-internals/owner';
+import { assert } from '@ember/debug';
 import { Dict, Opaque, Simple } from '@glimmer/interfaces';
-import { CONSTANT_TAG, Tag } from '@glimmer/reference';
+import { combine, CONSTANT_TAG, createUpdatableTag, Tag, update } from '@glimmer/reference';
 import { Arguments, CapturedArguments, ModifierManager } from '@glimmer/runtime';
 
 export interface CustomModifierDefinitionState<ModifierInstance> {
@@ -9,11 +11,24 @@ export interface CustomModifierDefinitionState<ModifierInstance> {
   delegate: ModifierManagerDelegate<ModifierInstance>;
 }
 
-export interface Capabilities {}
+export interface OptionalCapabilities {
+  disableLifecycleTracking?: boolean;
+}
+
+export interface Capabilities {
+  disableLifecycleTracking: boolean;
+}
 
 // Currently there are no capabilities for modifiers
-export function capabilities(_managerAPI: string, _optionalFeatures?: {}): Capabilities {
-  return {};
+export function capabilities(
+  managerAPI: '3.13',
+  optionalFeatures: OptionalCapabilities
+): Capabilities {
+  assert('Invalid modifier manager compatibility specified', managerAPI === '3.13');
+
+  return {
+    disableLifecycleTracking: Boolean(optionalFeatures.disableLifecycleTracking),
+  };
 }
 
 export class CustomModifierDefinition<ModifierInstance> {
@@ -39,6 +54,8 @@ export class CustomModifierDefinition<ModifierInstance> {
 }
 
 export class CustomModifierState<ModifierInstance> {
+  public tag = createUpdatableTag();
+
   constructor(
     public element: Simple.Element,
     public delegate: ModifierManagerDelegate<ModifierInstance>,
@@ -109,18 +126,36 @@ class InteractiveCustomModifierManager<ModifierInstance>
     return new CustomModifierState(element, definition.delegate, instance, capturedArgs);
   }
 
-  getTag({ args }: CustomModifierState<ModifierInstance>): Tag {
-    return args.tag;
+  getTag({ args, tag }: CustomModifierState<ModifierInstance>): Tag {
+    return combine([tag, args.tag]);
   }
 
   install(state: CustomModifierState<ModifierInstance>) {
-    let { element, args, delegate, modifier } = state;
-    delegate.installModifier(modifier, element, args.value());
+    let { element, args, delegate, modifier, tag } = state;
+
+    let tracked = track(() => {
+      delegate.installModifier(modifier, element, args.value());
+    });
+
+    let { capabilities } = delegate;
+
+    if (capabilities === undefined || capabilities.disableLifecycleTracking !== true) {
+      update(tag, tracked);
+    }
   }
 
   update(state: CustomModifierState<ModifierInstance>) {
-    let { args, delegate, modifier } = state;
-    delegate.updateModifier(modifier, args.value());
+    let { args, delegate, modifier, tag } = state;
+
+    let tracked = track(() => {
+      delegate.updateModifier(modifier, args.value());
+    });
+
+    let { capabilities } = delegate;
+
+    if (capabilities === undefined || capabilities.disableLifecycleTracking !== true) {
+      update(tag, tracked);
+    }
   }
 
   getDestructor(state: CustomModifierState<ModifierInstance>) {

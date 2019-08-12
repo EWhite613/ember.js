@@ -211,6 +211,46 @@ if (EMBER_METAL_TRACKED_PROPERTIES) {
 
         assert.strictEqual(computeCount, 2, 'compute is called exactly 2 times');
       }
+
+      '@test class based helpers are autotracked'(assert) {
+        let computeCount = 0;
+
+        let TrackedClass = EmberObject.extend({
+          value: tracked({ value: 'bob' }),
+        });
+
+        let trackedInstance = TrackedClass.create();
+
+        this.registerComponent('person', {
+          ComponentClass: Component.extend(),
+          template: strip`{{hello-world}}`,
+        });
+
+        this.registerHelper('hello-world', {
+          compute() {
+            computeCount++;
+            return `${trackedInstance.value}-value`;
+          },
+        });
+
+        this.render('<Person/>');
+
+        this.assertText('bob-value');
+
+        assert.strictEqual(computeCount, 1, 'compute is called exactly 1 time');
+
+        runTask(() => this.rerender());
+
+        this.assertText('bob-value');
+
+        assert.strictEqual(computeCount, 1, 'compute is called exactly 1 time');
+
+        runTask(() => (trackedInstance.value = 'sal'));
+
+        this.assertText('sal-value');
+
+        assert.strictEqual(computeCount, 2, 'compute is called exactly 2 times');
+      }
     }
   );
 }
