@@ -89,7 +89,7 @@
     "@glimmer/owner": "0.84.0",
     "@glimmer/program": "0.83.1",
     "@glimmer/reference": "0.83.1",
-    "@glimmer/runtime": "0.83.1",
+    "@glimmer/runtime": "0.84.2",
     "@glimmer/validator": "0.83.1",
     "@simple-dom/document": "^1.4.0",
     "@types/qunit": "^2.11.3",
